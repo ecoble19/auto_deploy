@@ -8,21 +8,23 @@ pub struct DeployCmd {
     pub location: PathBuf,
     pub configuration: Configuration,
     pub framework: Option<String>,
+    pub folder_profile: Option<String>,
     pub force: bool,
 
 }
 
 impl DeployCmd {
-    pub fn new(location: PathBuf, configuration:Configuration, framework: Option<String>, force: bool) -> Self {
+    pub fn new(location: PathBuf, configuration:Configuration, framework: Option<String>, folder_profile: Option<String>, force: bool) -> Self {
         DeployCmd {
             location,
             configuration,
             framework,
+            folder_profile,
             force
         }
     }
     pub fn default() -> Self {
-        DeployCmd::new(PathBuf::from("./"), Configuration::Release, None, false)
+        DeployCmd::new(PathBuf::from("./"), Configuration::Release, None,None, false)
     }
 }
 
@@ -43,6 +45,10 @@ impl Cmd for DeployCmd {
         }
         if self.force {
             b.append(" --force");
+        }
+        if self.folder_profile.is_some() {
+            b.append(" -p:PublishProfile=");
+            b.append(self.folder_profile.as_ref().unwrap().to_owned());
         }
         b.append(" --no-build");
         b.append(" -o");
