@@ -1,12 +1,17 @@
 
 use std::process::{Command, Output};
-use std::ffi::OsString;
 use std::{error};
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::string::String;
 
-pub mod command;
 pub mod dotnet;
+
+#[derive(PartialEq)]
+pub enum Configuration {
+    Debug,
+    Release
+}
 
 #[derive(Debug)]
 struct InvalidOperationError {
@@ -34,21 +39,21 @@ impl error::Error for InvalidOperationError {
 // Change the alias to `Box<error::Error>`.
 pub type Result<T> = std::result::Result<T, Box<dyn error::Error + Send>>;
 
+pub trait AutoDeploy {
+    fn build(&self) -> String;
+    fn test(&self) -> String;
+    fn deploy(&self) -> String;
 
-pub struct Project {
+}
+
+pub struct Project<'a> {
     pub name: String,
     dir: PathBuf,
     built: bool,
-    commands: ProjectCommand,
+    commands: &'a dyn AutoDeploy
 }
 
-struct ProjectCommand {
-    build: OsString,
-    test: OsString,
-    deploy: OsString
-}
-
-fn run_command(p: &Path, c: &OsString) -> Result<Output> {
+fn run_command(p: &Path, c: &String) -> Result<Output> {
     let output = if cfg!(target_os = "windows") {
         Command::new("cmd")
             .current_dir(p)
@@ -68,45 +73,41 @@ fn run_command(p: &Path, c: &OsString) -> Result<Output> {
     }
 }
 
-impl Project {
+impl <'a> Project<'a> {
 
-    pub fn new(name: String, dir: &str) -> Self {
-        Project {
+    pub fn new(name: String, dir: &str, commands: &'a dyn AutoDeploy) -> Self {
+        Self {
             name,
             dir: PathBuf::from(dir),
             built: false,
-            commands: ProjectCommand {
-                build: Default::default(),
-                test: Default::default(),
-                deploy: Default::default()
-            }
+            commands
         }
     }
 
-    pub fn change_dir(&mut self, p: PathBuf) {
-        self.dir.push(p);
-    }
-
-    /// Adds build command
-    pub fn build_command(&mut self, s: OsString) -> &mut Self {
-        self.commands.build = s;
-        self
-    }
-
-    /// Adds test command
-    pub fn test_command(&mut self, s: OsString) -> &mut Self {
-        self.commands.test = s;
-        self
-    }
-
-    pub fn deploy_command(&mut self, s: OsString) -> &mut Self {
-        self.commands.deploy = s;
-        self
-    }
+    // pub fn project_dir(&mut self, p: PathBuf) {
+    //     self.dir.push(p);
+    // }
+    //
+    // /// Adds build command
+    // pub fn build_command(&mut self, s: String) -> &mut Self {
+    //     self.commands.build = s;
+    //     self
+    // }
+    //
+    // /// Adds test command
+    // pub fn test_command(&mut self, s: String) -> &mut Self {
+    //     self.commands.test = s;
+    //     self
+    // }
+    //
+    // pub fn deploy_command(&mut self, s: String) -> &mut Self {
+    //     self.commands.deploy = s;
+    //     self
+    // }
 
     ///Builds the project before the tests can be run
     pub fn build(&mut self) -> Result<()> {
-        let r = run_command(&self.dir, &self.commands.build);
+        let r = run_command(&self.dir, &self.commands.build());
         match r {
             Ok(o) => {
                 self.built = true;
@@ -124,7 +125,7 @@ impl Project {
     ///This function should execute unit tests or any other method of testing on a project
     /// and return a result whether all tests passed or not
     pub fn test(&self) -> Result<()> {
-        match run_command(&self.dir, &self.commands.test) {
+        match run_command(&self.dir, &self.commands.test()) {
             Ok(o) => {
                 if !o.status.success() {
                     return Err(Box::new(InvalidOperationError::new(&String::from_utf8(o.stdout).unwrap())));
@@ -141,7 +142,7 @@ impl Project {
         if !self.built {
             return Err(Box::new(InvalidOperationError::new("Project has not been built")));
         }
-        match run_command(&self.dir, &self.commands.deploy) {
+        match run_command(&self.dir, &self.commands.deploy()) {
             Ok(o) => {
                 if !o.status.success() {
                     return Err(Box::new(InvalidOperationError::new(&String::from_utf8(o.stdout).unwrap())));
@@ -157,14 +158,14 @@ impl Project {
 mod tests {
     use crate::{Project, ProjectCommand, run_command};
     use std::str;
-    use std::ffi::{OsString};
+    use std::ffi::{String};
     use std::error::Error;
     use std::process::{Command, ExitStatus, Output};
     use std::path::{Path, PathBuf};
 
     #[test]
     fn test_works() {
-        let command = OsString::from("echo Hello, world");
+        let command = String::from("echo Hello, world");
         let p = Project {
             name: "Some project".to_string(),
             dir: PathBuf::from("./"),
@@ -183,7 +184,7 @@ mod tests {
 
     #[test]
     fn deploy_fails_with_no_build() {
-        let command = OsString::from("echo Hello, world");
+        let command = String::from("echo Hello, world");
         let mut p = Project {
             name: "Some project".to_string(),
             built: false,
@@ -202,7 +203,7 @@ mod tests {
 
     #[test]
     fn deploy_succeeds_with_build() {
-        let command = OsString::from("echo Hello, world");
+        let command = String::from("echo Hello, world");
         let mut p = Project {
             name: "Some project".to_string(),
             built: true,
@@ -221,7 +222,7 @@ mod tests {
 
     #[test]
     fn build_sets_built() {
-        let command = OsString::from("echo Hello, world");
+        let command = String::from("echo Hello, world");
         let mut p = Project {
             name: "Some project".to_string(),
             built: false,
@@ -238,7 +239,7 @@ mod tests {
 
     #[test]
     fn bad_command_fails() {
-        match run_command(Path::new("./"), &OsString::from("eco Hello"))
+        match run_command(Path::new("./"), &String::from("eco Hello"))
             .unwrap().status.success() {
             true => assert!(false, "`eco` should not be recognized"),
             false => assert!(true)
@@ -247,7 +248,7 @@ mod tests {
 
     #[test]
     fn good_command_succeeds() {
-        match run_command(Path::new("./"), &OsString::from("echo Hello"))
+        match run_command(Path::new("./"), &String::from("echo Hello"))
             .unwrap().status.success() {
             true => assert!(true),
             false => assert!(false, "`echo` should be recognized"),

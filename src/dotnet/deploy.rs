@@ -1,6 +1,5 @@
 
-use crate::command::{Configuration, Cmd};
-use std::ffi::OsString;
+use crate::{Configuration};
 use string_builder::Builder;
 use std::path::PathBuf;
 
@@ -28,8 +27,8 @@ impl DeployCmd {
     }
 }
 
-impl Cmd for DeployCmd {
-    fn to_os_string(&self) -> OsString {
+impl DeployCmd {
+    pub fn to_cmd(&self) -> String {
         let mut b = Builder::default();
         b.append("dotnet publish");
         b.append(" -c");
@@ -54,6 +53,6 @@ impl Cmd for DeployCmd {
         b.append(" -o");
         b.append(" ");
         b.append(self.location.to_str().unwrap());
-        OsString::from(b.string().unwrap())
+        b.string().unwrap()
     }
 }

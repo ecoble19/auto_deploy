@@ -1,11 +1,6 @@
-use crate::command::{Configuration, Cmd};
-use std::ffi::OsString;
+use crate::{Configuration};
 use string_builder::Builder;
 use std::path::PathBuf;
-
-pub struct Logger {
-
-}
 
 pub struct TestCmd {
     pub configuration: Configuration,
@@ -24,8 +19,8 @@ impl TestCmd {
     }
 }
 
-impl Cmd for TestCmd {
-    fn to_os_string(&self) -> OsString {
+impl TestCmd {
+    pub fn to_cmd(&self) -> String {
         let mut b = Builder::default();
         b.append("dotnet test");
         b.append(" -c");
@@ -38,6 +33,6 @@ impl Cmd for TestCmd {
         b.append(" --logger:\"trx;logFileName=");
         b.append(self.log_file_name.to_str().unwrap());
         b.append("\"");
-        OsString::from(b.string().unwrap())
+        b.string().unwrap()
     }
 }
